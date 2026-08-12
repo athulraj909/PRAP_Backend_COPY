@@ -160,7 +160,11 @@ class AssessmentCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
 class QuestionListCreateView(generics.ListCreateAPIView):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
-    permission_classes = [IsAdminUser]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [permissions.AllowAny()]
+        return [IsAdminUser()]
 
     def get_queryset(self):
         queryset = Question.objects.all()
@@ -412,3 +416,117 @@ class StudentProfileView(APIView):
             return Response({'success': False, 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
         except StudentProfile.DoesNotExist:
             return Response({'success': False, 'message': 'Student profile not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class StudentExamSubmitView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from .models import AssessmentResult, StudentProfile
+        
+        student_data = request.data.get('student')
+        answers = request.data.get('answers', {})
+        total_questions = request.data.get('totalQuestions', 0)
+        score = request.data.get('score', 0)
+        percentage = request.data.get('percentage', 0)
+        time_taken = request.data.get('timeTaken', 0)
+        category_performance = request.data.get('categoryPerformance', [])
+        review = request.data.get('review', [])
+        reason = request.data.get('reason', 'Submitted by student')
+        
+        if not student_data or not student_data.get('mobile'):
+            return Response({
+                'success': False,
+                'message': 'Student information is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Get student profile
+            student_profile = StudentProfile.objects.filter(mobile=student_data['mobile']).first()
+            if not student_profile:
+                # Create a fallback profile when the student exists only in frontend session
+                student_profile = StudentProfile.objects.create(
+                    user=None,
+                    student_name=student_data.get('name', student_data.get('studentName', 'Student')),
+                    email=student_data.get('email', ''),
+                    mobile=student_data['mobile'],
+                    district=None,
+                    college=None,
+                    course=None,
+                )
+                # Log fallback profile creation for debugging
+                print(f"Created fallback StudentProfile for mobile {student_data['mobile']}")
+
+            # Create assessment result
+            result = AssessmentResult.objects.create(
+                student=student_profile,
+                student_mobile=student_data['mobile'],
+                student_name=student_data.get('name', student_profile.student_name),
+                college=student_data.get('college', student_profile.college.college_name if student_profile.college else ''),
+                course=student_data.get('course', student_profile.course.course_name if student_profile.course else ''),
+                score=score,
+                total_marks=total_questions,
+                category_breakdown=category_performance,
+                answers={
+                    'answers': answers,
+                    'review': review,
+                    'reason': reason,
+                    'timeTaken': time_taken
+                }
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'Exam submitted successfully',
+                'result_id': result.id
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'Failed to submit exam: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StudentExamResultsView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import AssessmentResult
+        
+        mobile = request.query_params.get('mobile')
+        if not mobile:
+            return Response({
+                'success': False,
+                'message': 'Mobile number is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            results = AssessmentResult.objects.filter(student_mobile=mobile).order_by('-completed_at')
+            results_data = []
+            
+            for result in results:
+                results_data.append({
+                    'id': result.id,
+                    'student_name': result.student_name,
+                    'student_mobile': result.student_mobile,
+                    'college': result.college,
+                    'course': result.course,
+                    'score': result.score,
+                    'total_marks': result.total_marks,
+                    'percentage': round((result.score / result.total_marks) * 100, 2) if result.total_marks > 0 else 0,
+                    'category_breakdown': result.category_breakdown,
+                    'answers': result.answers,
+                    'completed_at': result.completed_at.isoformat()
+                })
+            
+            return Response({
+                'success': True,
+                'results': results_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'Failed to fetch results: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
