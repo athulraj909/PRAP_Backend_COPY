@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import District, College, Course, StudentProfile, AssessmentCategory, Question
+from .models import District, College, Course, StudentProfile, AssessmentCategory, Question, ExamSettings
 
 User = get_user_model()
 
@@ -282,3 +282,10 @@ class StudentLoginSerializer(serializers.Serializer):
             'user': student_data,
             'student': student_data
         }
+
+
+class ExamSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExamSettings
+        fields = ['id', 'question_count', 'exam_duration_minutes', 'updated_at']
+        read_only_fields = ['id', 'updated_at']

@@ -148,3 +148,16 @@ class AssessmentResult(models.Model):
 
     def __str__(self):
         return f"Result: {self.student_name} - {self.score}/{self.total_marks}"
+
+
+class ExamSettings(models.Model):
+    question_count = models.IntegerField(default=100, help_text="Number of questions to load in exam")
+    exam_duration_minutes = models.IntegerField(default=100, help_text="Exam duration in minutes")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Exam Settings"
+        verbose_name_plural = "Exam Settings"
+
+    def __str__(self):
+        return f"Settings: {self.question_count} questions, {self.exam_duration_minutes} minutes"

@@ -4,7 +4,8 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import authenticate
-from .models import District, College, Course, StudentProfile, AssessmentCategory, Question
+from django.db import models
+from .models import District, College, Course, StudentProfile, AssessmentCategory, Question, ExamSettings
 from .serializers import (
     DistrictSerializer,
     CollegeSerializer,
@@ -13,7 +14,8 @@ from .serializers import (
     StudentRegisterSerializer,
     StudentLoginSerializer,
     AssessmentCategorySerializer,
-    QuestionSerializer
+    QuestionSerializer,
+    ExamSettingsSerializer
 )
 from .utils import send_welcome_email
 
@@ -416,6 +418,122 @@ class StudentProfileView(APIView):
             return Response({'success': False, 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
         except StudentProfile.DoesNotExist:
             return Response({'success': False, 'message': 'Student profile not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class StudentListView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        college_name = request.query_params.get('college')
+        
+        queryset = StudentProfile.objects.all()
+        
+        if college_name:
+            queryset = queryset.filter(college__college_name__iexact=college_name)
+        
+        serializer = StudentProfileSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class DashboardStatsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from .models import AssessmentResult
+        
+        # Calculate statistics
+        total_students = StudentProfile.objects.count()
+        total_assessments = AssessmentResult.objects.count()
+        total_colleges = College.objects.count()
+        
+        # Calculate hireability score (average percentage of all assessments)
+        hireability_score = 0
+        if total_assessments > 0:
+            total_score = AssessmentResult.objects.aggregate(
+                total=models.Sum('score')
+            )['total'] or 0
+            total_possible = AssessmentResult.objects.aggregate(
+                total=models.Sum('total_marks')
+            )['total'] or 0
+            if total_possible > 0:
+                hireability_score = round((total_score / total_possible) * 100)
+        
+        return Response({
+            'total_students': total_students,
+            'total_assessments': total_assessments,
+            'total_colleges': total_colleges,
+            'hireability_score': f"{hireability_score}%"
+        })
+
+
+class RecentActivityView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from .models import AssessmentResult
+        
+        # Get recent assessment results (last 10)
+        recent_results = AssessmentResult.objects.order_by('-completed_at')[:10]
+        
+        activity_data = []
+        for result in recent_results:
+            activity_data.append({
+                'student_name': result.student_name,
+                'student_mobile': result.student_mobile,
+                'assessment': 'Placement Assessment',
+                'status': 'Completed',
+                'score': f"{round((result.score / result.total_marks) * 100)}%" if result.total_marks > 0 else "0%",
+                'completed_at': result.completed_at.isoformat()
+            })
+        
+        return Response(activity_data)
+
+
+class ExamSettingsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        # Get or create exam settings (singleton pattern)
+        settings, created = ExamSettings.objects.get_or_create(
+            pk=1,
+            defaults={
+                'question_count': 100,
+                'exam_duration_minutes': 100
+            }
+        )
+        serializer = ExamSettingsSerializer(settings)
+        return Response(serializer.data)
+
+    def put(self, request):
+        # Get or create exam settings
+        settings, created = ExamSettings.objects.get_or_create(
+            pk=1,
+            defaults={
+                'question_count': 100,
+                'exam_duration_minutes': 100
+            }
+        )
+        serializer = ExamSettingsSerializer(settings, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ExamSettingsPublicView(generics.ListAPIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        # Public endpoint for students to fetch exam settings
+        settings, created = ExamSettings.objects.get_or_create(
+            pk=1,
+            defaults={
+                'question_count': 100,
+                'exam_duration_minutes': 100
+            }
+        )
+        serializer = ExamSettingsSerializer(settings)
+        return Response(serializer.data)
 
 
 class StudentExamSubmitView(APIView):
