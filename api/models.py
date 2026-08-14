@@ -80,6 +80,9 @@ class AssessmentCategory(models.Model):
     description = models.TextField(blank=True, null=True)
     applicable_to = models.CharField(max_length=20, choices=APPLICABLE_CHOICES, default='BOTH')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Active')
+    percentage = models.FloatField(default=0.0)
+    it_percentage = models.FloatField(default=0.0)
+    non_it_percentage = models.FloatField(default=0.0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

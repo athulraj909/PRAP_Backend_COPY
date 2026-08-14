@@ -46,10 +46,12 @@ class CourseSerializer(serializers.ModelSerializer):
 class AssessmentCategorySerializer(serializers.ModelSerializer):
     categoryName = serializers.CharField(source='category_name', required=True)
     applicableTo = serializers.CharField(source='applicable_to', required=True)
+    itPercentage = serializers.FloatField(source='it_percentage', required=False, default=0.0)
+    nonItPercentage = serializers.FloatField(source='non_it_percentage', required=False, default=0.0)
 
     class Meta:
         model = AssessmentCategory
-        fields = ['id', 'categoryName', 'description', 'applicableTo', 'status']
+        fields = ['id', 'categoryName', 'description', 'applicableTo', 'status', 'percentage', 'itPercentage', 'nonItPercentage']
         extra_kwargs = {
             'category_name': {'write_only': True},
             'applicable_to': {'write_only': True}
