@@ -118,9 +118,9 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'athulraj.oneteam@gmail.com'
-EMAIL_HOST_PASSWORD = 'mkag lxzy pits dnzv'
-DEFAULT_FROM_EMAIL = 'PRAP <athulraj.oneteam@gmail.com>'
+EMAIL_HOST_USER = 'oneteamprap@gmail.com'
+EMAIL_HOST_PASSWORD = 'xlpr bfzs lxgq teeq'
+DEFAULT_FROM_EMAIL = 'PRAP <oneteamprap@gmail.com>'
 EMAIL_SUBJECT_PREFIX = '[PRAP] '
 
 # Internationalization
