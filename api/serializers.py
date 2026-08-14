@@ -126,6 +126,12 @@ class StudentRegisterSerializer(serializers.Serializer):
     college = serializers.CharField(required=False, allow_blank=True)
     course = serializers.CharField(required=False, allow_blank=True)
 
+    def validate_email(self, value):
+        clean_email = value.strip().lower()
+        if StudentProfile.objects.filter(email__iexact=clean_email).exists() or User.objects.filter(email__iexact=clean_email).exists():
+            raise serializers.ValidationError("This email address is already registered")
+        return clean_email
+
     def validate_mobile(self, value):
         # Validate 10 digit mobile format if possible
         clean_mobile = value.strip()
