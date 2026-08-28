@@ -44,3 +44,15 @@ Thumbs.db
 # Environment
 .env
 .env.local
+.env.production
+.env.staging
+
+# Logs
+logs/
+*.log
+django.log
+
+# Database backups
+database_backups/
+*.sqlite3.backup
+*.sqlite3-journal

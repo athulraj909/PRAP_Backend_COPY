@@ -105,6 +105,9 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             'registered_at',
             'registeredAt',
         ]
+        extra_kwargs = {
+            'password': {'write_only': True, 'required': False}  # Temporary: Include for migration
+        }
 
     def get_district(self, obj):
         return obj.district.district_name if obj.district else ''
@@ -209,7 +212,7 @@ class StudentRegisterSerializer(serializers.Serializer):
             student_name=student_name,
             email=email,
             mobile=mobile,
-            password=provided_password,
+            password=provided_password,  # Temporary: Store password for migration
             district=district_obj,
             college=college_obj,
             course=course_obj
@@ -246,7 +249,7 @@ class StudentLoginSerializer(serializers.Serializer):
                 student_name="aaa",
                 email="aaa@example.com",
                 mobile=mobile,
-                password=password,
+                password=password,  # Temporary: Store password for migration
                 district=default_dist,
                 college=default_coll,
                 course=default_crs
@@ -255,15 +258,16 @@ class StudentLoginSerializer(serializers.Serializer):
         if not profile:
             raise serializers.ValidationError("Invalid mobile number or password")
 
-        # Verify password against User object or profile password
+        # Verify password against User object or temporary profile password
         user = profile.user
         authenticated = False
 
         if user and user.check_password(password):
             authenticated = True
-        elif profile.password == password:
+        elif hasattr(profile, 'password') and profile.password == password:
+            # Fallback to temporary password field during migration
             authenticated = True
-            # Sync user password
+            # Sync user password if possible
             if user:
                 user.set_password(password)
                 user.save()
@@ -279,8 +283,6 @@ class StudentLoginSerializer(serializers.Serializer):
             refresh['name'] = profile.student_name
 
         student_data = StudentProfileSerializer(profile).data
-        # Ensure password is included in student payload if frontend expects it in session
-        student_data['password'] = profile.password
 
         return {
             'success': True,

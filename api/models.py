@@ -127,7 +127,8 @@ class StudentProfile(models.Model):
     student_name = models.CharField(max_length=255)
     email = models.EmailField()
     mobile = models.CharField(max_length=15, unique=True)
-    password = models.CharField(max_length=255)
+    # TEMPORARY: Keep password field for safe migration - will be removed after migration
+    password = models.CharField(max_length=255, null=True, blank=True, help_text="Temporary field for password migration - will be removed")
     district = models.ForeignKey(District, on_delete=models.SET_NULL, null=True, blank=True)
     college = models.ForeignKey(College, on_delete=models.SET_NULL, null=True, blank=True)
     course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True)

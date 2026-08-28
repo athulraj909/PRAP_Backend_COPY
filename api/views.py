@@ -162,11 +162,7 @@ class AssessmentCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
 class QuestionListCreateView(generics.ListCreateAPIView):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
-
-    def get_permissions(self):
-        if self.request.method == 'GET':
-            return [permissions.AllowAny()]
-        return [IsAdminUser()]
+    permission_classes = [IsAdminUser]
 
     def get_queryset(self):
         queryset = Question.objects.all()
@@ -328,18 +324,20 @@ class StudentRegisterView(APIView):
             refresh = RefreshToken.for_user(user) if user else RefreshToken()
             
             student_data = StudentProfileSerializer(profile).data
-            student_data['password'] = profile.password
 
             # Send welcome email with credentials
             district_name = profile.district.district_name if profile.district else 'N/A'
             college_name = profile.college.college_name if profile.college else 'N/A'
             course_name = profile.course.course_name if profile.course else 'N/A'
             
+            # Get the password for email (from temporary field or generated)
+            provided_password = profile.password if hasattr(profile, 'password') and profile.password else f"PRAP@{profile.mobile[-4:]}"
+            
             send_welcome_email(
                 student_name=profile.student_name,
                 student_email=profile.email,
                 student_mobile=profile.mobile,
-                password=profile.password,
+                password=provided_password,
                 district=district_name,
                 college=college_name,
                 course=course_name
@@ -541,6 +539,7 @@ class StudentExamSubmitView(APIView):
 
     def post(self, request):
         from .models import AssessmentResult, StudentProfile
+        import secrets
         
         student_data = request.data.get('student')
         answers = request.data.get('answers', {})
@@ -551,6 +550,7 @@ class StudentExamSubmitView(APIView):
         category_performance = request.data.get('categoryPerformance', [])
         review = request.data.get('review', [])
         reason = request.data.get('reason', 'Submitted by student')
+        resume_token = request.data.get('resumeToken')
         
         if not student_data or not student_data.get('mobile'):
             return Response({
@@ -562,18 +562,18 @@ class StudentExamSubmitView(APIView):
             # Get student profile
             student_profile = StudentProfile.objects.filter(mobile=student_data['mobile']).first()
             if not student_profile:
-                # Create a fallback profile when the student exists only in frontend session
-                student_profile = StudentProfile.objects.create(
-                    user=None,
-                    student_name=student_data.get('name', student_data.get('studentName', 'Student')),
-                    email=student_data.get('email', ''),
-                    mobile=student_data['mobile'],
-                    district=None,
-                    college=None,
-                    course=None,
-                )
-                # Log fallback profile creation for debugging
-                print(f"Created fallback StudentProfile for mobile {student_data['mobile']}")
+                return Response({
+                    'success': False,
+                    'message': 'Student not found. Please register first.'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Verify resume token if provided (optional security layer)
+            if resume_token and hasattr(student_profile, 'resume_token'):
+                if student_profile.resume_token != resume_token:
+                    return Response({
+                        'success': False,
+                        'message': 'Invalid resume token'
+                    }, status=status.HTTP_403_FORBIDDEN)
 
             # Create assessment result
             result = AssessmentResult.objects.create(
@@ -620,6 +620,14 @@ class StudentExamResultsView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
+            # Verify that the mobile number belongs to a registered student
+            student_profile = StudentProfile.objects.filter(mobile=mobile).first()
+            if not student_profile:
+                return Response({
+                    'success': False,
+                    'message': 'Student not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
             results = AssessmentResult.objects.filter(student_mobile=mobile).order_by('-completed_at')
             results_data = []
             
