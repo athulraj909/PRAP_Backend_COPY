@@ -1,10 +1,11 @@
-from rest_framework import status, generics, permissions
+from rest_framework import status, generics, permissions, pagination
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import authenticate
 from django.db import models
+from django.core.cache import cache
 from .models import District, College, Course, StudentProfile, AssessmentCategory, Question, ExamSettings
 from .serializers import (
     DistrictSerializer,
@@ -18,6 +19,12 @@ from .serializers import (
     ExamSettingsSerializer
 )
 from .utils import send_welcome_email
+
+
+class StandardResultsSetPagination(pagination.PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
 
 
 class IsAdminUser(permissions.BasePermission):
@@ -418,19 +425,114 @@ class StudentProfileView(APIView):
             return Response({'success': False, 'message': 'Student profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
-class StudentListView(APIView):
+class StudentListView(generics.ListAPIView):
     permission_classes = [IsAdminUser]
+    serializer_class = StudentProfileSerializer
+    pagination_class = StandardResultsSetPagination
 
-    def get(self, request):
-        college_name = request.query_params.get('college')
+    def get_queryset(self):
+        college_name = self.request.query_params.get('college')
+        search = self.request.query_params.get('search', '')
         
-        queryset = StudentProfile.objects.all()
+        # Optimize queries with select_related for foreign keys
+        queryset = StudentProfile.objects.select_related(
+            'district', 'college', 'course', 'user'
+        ).all()
         
         if college_name:
             queryset = queryset.filter(college__college_name__iexact=college_name)
         
-        serializer = StudentProfileSerializer(queryset, many=True)
-        return Response(serializer.data)
+        if search:
+            queryset = queryset.filter(
+                student_name__icontains=search
+            ).filter(
+                models.Q(email__icontains=search) |
+                models.Q(mobile__icontains=search)
+            )
+        
+        return queryset.order_by('-registered_at')
+
+
+class StudentPerformanceBulkView(APIView):
+    """
+    Bulk endpoint to get performance data for multiple students in a single request
+    to avoid N+1 query problems
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from .models import AssessmentResult
+        
+        mobiles = request.query_params.get('mobiles', '').split(',')
+        mobiles = [m.strip() for m in mobiles if m.strip()]
+        
+        if not mobiles:
+            return Response({
+                'success': False,
+                'message': 'No mobile numbers provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Cache key for this request
+        cache_key = f'student_performance_bulk_{"_".join(sorted(mobiles))}'
+        cached_data = cache.get(cache_key)
+        
+        if cached_data:
+            return Response({
+                'success': True,
+                'cached': True,
+                'data': cached_data
+            })
+        
+        try:
+            # Get all assessment results for these students in a single query
+            results = AssessmentResult.objects.filter(
+                student_mobile__in=mobiles
+            ).order_by('-completed_at')
+            
+            # Group results by student mobile
+            performance_data = {}
+            for mobile in mobiles:
+                student_results = [r for r in results if r.student_mobile == mobile]
+                
+                if student_results:
+                    total_score = sum(r.score for r in student_results)
+                    total_possible = sum(r.total_marks for r in student_results)
+                    avg_percentage = round((total_score / total_possible) * 100) if total_possible > 0 else 0
+                    
+                    performance_data[mobile] = {
+                        'totalAssessments': len(student_results),
+                        'totalScore': total_score,
+                        'totalPossible': total_possible,
+                        'avgPercentage': avg_percentage,
+                        'latestPercentage': round((student_results[0].score / student_results[0].total_marks) * 100) if student_results[0].total_marks > 0 else 0,
+                        'latestDate': student_results[0].completed_at.isoformat(),
+                        'categoryPerformance': student_results[0].category_breakdown or [],
+                    }
+                else:
+                    performance_data[mobile] = {
+                        'totalAssessments': 0,
+                        'totalScore': 0,
+                        'totalPossible': 0,
+                        'avgPercentage': 0,
+                        'latestPercentage': 0,
+                        'latestDate': None,
+                        'categoryPerformance': [],
+                    }
+            
+            # Cache for 5 minutes
+            cache.set(cache_key, performance_data, 300)
+            
+            return Response({
+                'success': True,
+                'cached': False,
+                'data': performance_data
+            })
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'Failed to fetch performance data: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class DashboardStatsView(APIView):

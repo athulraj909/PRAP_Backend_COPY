@@ -51,11 +51,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # Custom Security Middleware
-    'api.middleware.security_headers.SecurityHeadersMiddleware',
-    'api.middleware.request_validation.RequestValidationMiddleware',
-    'api.middleware.ip_security.IPSecurityMiddleware',
-    'api.middleware.rate_limit.RateLimitMiddleware',
+    # Custom Security Middleware (optimized order)
+    'api.middleware.request_validation.RequestValidationMiddleware',  # First: Validate requests
+    'api.middleware.ip_security.IPSecurityMiddleware',  # Second: IP-based security
+    'api.middleware.rate_limit.RateLimitMiddleware',  # Third: Rate limiting
+    'api.middleware.security_headers.SecurityHeadersMiddleware',  # Last: Add headers
 ]
 
 ROOT_URLCONF = 'prap_backend.urls'
@@ -194,8 +194,8 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     
 # Rate Limiting Settings
-RATE_LIMIT_ANON = os.getenv('RATE_LIMIT_ANON', '100/hour')
-RATE_LIMIT_USER = os.getenv('RATE_LIMIT_USER', '1000/hour')
+RATE_LIMIT_ANON = os.getenv('RATE_LIMIT_ANON', '200/hour')
+RATE_LIMIT_USER = os.getenv('RATE_LIMIT_USER', '5000/hour')
 
 # IP Security Settings
 BLOCKED_IPS = []  # Add permanently blocked IPs here

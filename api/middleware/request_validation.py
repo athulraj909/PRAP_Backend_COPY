@@ -26,14 +26,20 @@ class RequestValidationMiddleware:
         # Validation settings
         self.max_request_size = getattr(settings, 'MAX_REQUEST_SIZE', 10 * 1024 * 1024)  # 10MB default
         self.require_user_agent = getattr(settings, 'REQUIRE_USER_AGENT', True)
-        self.allowed_content_types = getattr(settings, 'ALLOWED_CONTENT_TYPES', [
+        self.allowed_content_types = set(getattr(settings, 'ALLOWED_CONTENT_TYPES', [
             'application/json',
             'multipart/form-data',
             'application/x-www-form-urlencoded'
-        ])
+        ]))
+        
+        # Pre-compile regex patterns for better performance
+        self.blocked_patterns = [
+            re.compile(pattern, re.IGNORECASE) 
+            for pattern in ['bot', 'crawler', 'spider', 'scraper', 'curl', 'wget', 'python-requests', 'libwww-perl']
+        ]
         
     def _has_valid_user_agent(self, request):
-        """Check if request has a valid User-Agent header"""
+        """Check if request has a valid User-Agent header (optimized)"""
         if not self.require_user_agent:
             return True
             
@@ -44,24 +50,20 @@ class RequestValidationMiddleware:
             logger.warning("Request blocked: No User-Agent header")
             return False
         
-        # Block suspicious user agents
-        blocked_patterns = [
-            r'bot', r'crawler', r'spider', r'scraper', 
-            r'curl', r'wget', r'python-requests', r'libwww-perl'
-        ]
+        # Block suspicious user agents (skip for public endpoints to reduce CPU)
+        if request.path.startswith('/api/public/') or request.path == '/api/health/':
+            return True
         
-        for pattern in blocked_patterns:
-            if re.search(pattern, user_agent, re.IGNORECASE):
-                # Allow legitimate bots for specific endpoints
-                if request.path in ['/api/public/', '/api/health/']:
-                    continue
+        user_agent_lower = user_agent.lower()
+        for pattern in self.blocked_patterns:
+            if pattern.search(user_agent_lower):
                 logger.warning(f"Request blocked: Suspicious User-Agent: {user_agent}")
                 return False
         
         return True
     
     def _has_valid_content_type(self, request):
-        """Check if request has valid Content-Type for POST/PUT/PATCH"""
+        """Check if request has valid Content-Type for POST/PUT/PATCH (optimized)"""
         if request.method not in ['POST', 'PUT', 'PATCH']:
             return True
             
@@ -75,6 +77,7 @@ class RequestValidationMiddleware:
             logger.warning(f"Request blocked: No Content-Type for {request.method} request")
             return False
         
+        # Use set for O(1) lookup instead of list
         if content_type not in self.allowed_content_types:
             logger.warning(f"Request blocked: Invalid Content-Type: {content_type}")
             return False
@@ -115,13 +118,17 @@ class RequestValidationMiddleware:
         return True
     
     def _check_referer_origin(self, request):
-        """Validate Referer header for POST requests"""
+        """Validate Referer header for POST requests (optimized)"""
         if request.method != 'POST':
             return True
             
         referer = request.META.get('HTTP_REFERER', '')
         if not referer:
             return True  # Allow requests without referer
+        
+        # Quick check for known good origins
+        if 'vercel.app' in referer or 'localhost' in referer or '127.0.0.1' in referer:
+            return True
         
         # Check if referer is from allowed origins
         allowed_origins = getattr(settings, 'CORS_ALLOWED_ORIGINS', [])

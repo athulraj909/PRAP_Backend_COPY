@@ -61,7 +61,8 @@ class SecurityHeadersMiddleware:
             ]
             response['Permissions-Policy'] = ', '.join(permissions_directives)
             
-            # Remove server information
-            response.pop('Server', None)
+            # Remove server information (Django response doesn't have pop method)
+            if 'Server' in response:
+                del response['Server']
             
         return response

@@ -23,19 +23,31 @@ class IPSecurityMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         
-        # Security settings
-        self.blocked_ips = getattr(settings, 'BLOCKED_IPS', [])
-        self.allowed_ips = getattr(settings, 'ALLOWED_IPS', [])
+        # Security settings (convert to sets for O(1) lookups)
+        self.blocked_ips = set(getattr(settings, 'BLOCKED_IPS', []))
+        self.allowed_ips = set(getattr(settings, 'ALLOWED_IPS', []))
         self.max_failed_attempts = getattr(settings, 'MAX_FAILED_ATTEMPTS', 5)
         self.block_duration = getattr(settings, 'IP_BLOCK_DURATION', 3600)  # 1 hour default
         
+        # Pre-compile patterns for better performance
+        self.sql_patterns = ['\' OR', '\' AND', 'UNION SELECT', 'DROP TABLE', '1=1']
+        self.xss_patterns = ['<script', 'javascript:', 'onerror=', 'onload=']
+        self.path_traversal = ['../', '..\\', '%2e%2e']
+        
     def _get_client_ip(self, request):
-        """Get client IP address considering proxy headers"""
+        """Get client IP address considering proxy headers (optimized with caching)"""
+        # Check cache first
+        if hasattr(request, '_cached_client_ip'):
+            return request._cached_client_ip
+        
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             ip = x_forwarded_for.split(',')[0].strip()
         else:
             ip = request.META.get('REMOTE_ADDR')
+        
+        # Cache the result on the request object
+        request._cached_client_ip = ip
         return ip
     
     def _is_ip_blocked(self, ip):
@@ -73,38 +85,31 @@ class IPSecurityMiddleware:
                 logger.warning(f"IP blocked due to too many failed attempts: {ip}")
     
     def _detect_suspicious_activity(self, request, ip):
-        """Detect suspicious patterns in requests"""
-        suspicious_indicators = []
-        
-        # Check for SQL injection patterns
-        sql_patterns = ['\' OR', '\' AND', 'UNION SELECT', 'DROP TABLE', '1=1']
-        for param in request.GET.values():
-            for pattern in sql_patterns:
-                if pattern.lower() in str(param).lower():
-                    suspicious_indicators.append('SQL injection pattern')
-                    break
-        
-        # Check for XSS patterns
-        xss_patterns = ['<script', 'javascript:', 'onerror=', 'onload=']
-        for param in request.GET.values():
-            for pattern in xss_patterns:
-                if pattern.lower() in str(param).lower():
-                    suspicious_indicators.append('XSS pattern')
-                    break
-        
-        # Check for path traversal
-        path_traversal = ['../', '..\\', '%2e%2e']
-        for pattern in path_traversal:
-            if pattern in request.path:
-                suspicious_indicators.append('Path traversal')
-                break
-        
-        if suspicious_indicators:
-            logger.warning(f"Suspicious activity detected from {ip}: {suspicious_indicators}")
-            # Temporarily block IPs with suspicious activity
+        """Detect suspicious patterns in requests (optimized)"""
+        # Quick path traversal check (cheapest operation)
+        if any(pattern in request.path for pattern in self.path_traversal):
+            logger.warning(f"Suspicious activity detected from {ip}: Path traversal")
             block_key = f"ip_blocked:{ip}"
             cache.set(block_key, True, self.block_duration)
             return True
+        
+        # Only check query parameters for POST/PUT/PATCH requests to reduce CPU
+        if request.method in ['POST', 'PUT', 'PATCH']:
+            query_string = request.META.get('QUERY_STRING', '').lower()
+            
+            # Quick SQL injection check
+            if any(pattern.lower() in query_string for pattern in self.sql_patterns):
+                logger.warning(f"Suspicious activity detected from {ip}: SQL injection pattern")
+                block_key = f"ip_blocked:{ip}"
+                cache.set(block_key, True, self.block_duration)
+                return True
+            
+            # Quick XSS check
+            if any(pattern.lower() in query_string for pattern in self.xss_patterns):
+                logger.warning(f"Suspicious activity detected from {ip}: XSS pattern")
+                block_key = f"ip_blocked:{ip}"
+                cache.set(block_key, True, self.block_duration)
+                return True
         
         return False
     

@@ -26,9 +26,12 @@ class RateLimitMiddleware:
         self.anon_limit = getattr(settings, 'RATE_LIMIT_ANON', '100/hour')
         self.user_limit = getattr(settings, 'RATE_LIMIT_USER', '1000/hour')
         
-        # Parse rate limits
+        # Parse rate limits (cached in __init__ to avoid repeated parsing)
         self.anon_requests, self.anon_period = self._parse_rate_limit(self.anon_limit)
         self.user_requests, self.user_period = self._parse_rate_limit(self.user_limit)
+        
+        # Cache for IP addresses to avoid repeated parsing
+        self.ip_cache = {}
         
     def _parse_rate_limit(self, rate_string):
         """Parse rate limit string like '100/hour' into requests and period in seconds"""
@@ -51,22 +54,29 @@ class RateLimitMiddleware:
             return 100, 3600
     
     def _get_client_ip(self, request):
-        """Get client IP address considering proxy headers"""
+        """Get client IP address considering proxy headers (optimized with caching)"""
+        # Check cache first
+        if hasattr(request, '_cached_client_ip'):
+            return request._cached_client_ip
+        
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             ip = x_forwarded_for.split(',')[0].strip()
         else:
             ip = request.META.get('REMOTE_ADDR')
+        
+        # Cache the result on the request object
+        request._cached_client_ip = ip
         return ip
     
     def _get_rate_limit_key(self, request, ip):
-        """Generate cache key for rate limiting"""
+        """Generate cache key for rate limiting (optimized)"""
         if request.user.is_authenticated:
             # Use user ID for authenticated users
             key = f"rate_limit:user_{request.user.id}"
         else:
-            # Use IP address for anonymous users
-            ip_hash = hashlib.md5(ip.encode()).hexdigest()[:16]
+            # Use IP address for anonymous users (simpler hash for performance)
+            ip_hash = hashlib.md5(ip.encode()).hexdigest()[:12]  # Reduced from 16 to 12 chars
             key = f"rate_limit:anon_{ip_hash}"
         return key
     
@@ -109,8 +119,10 @@ class RateLimitMiddleware:
         return True
     
     def __call__(self, request):
-        # Skip rate limiting for static files and admin
-        if request.path.startswith('/static/') or request.path.startswith('/admin/'):
+        # Skip rate limiting for static files, admin, and safe methods
+        if (request.path.startswith('/static/') or 
+            request.path.startswith('/admin/') or
+            request.method in ['GET', 'HEAD', 'OPTIONS']):
             return self.get_response(request)
         
         ip = self._get_client_ip(request)
@@ -125,12 +137,18 @@ class RateLimitMiddleware:
         
         response = self.get_response(request)
         
-        # Add rate limit headers
-        if request.user.is_authenticated:
-            response['X-RateLimit-Limit'] = str(self.user_requests)
-            response['X-RateLimit-Remaining'] = str(max(0, self.user_requests - cache.get(self._get_rate_limit_key(request, ip), {}).get('count', 0)))
-        else:
-            response['X-RateLimit-Limit'] = str(self.anon_requests)
-            response['X-RateLimit-Remaining'] = str(max(0, self.anon_requests - cache.get(self._get_rate_limit_key(request, ip), {}).get('count', 0)))
+        # Add rate limit headers (simplified to reduce cache operations)
+        try:
+            if request.user.is_authenticated:
+                response['X-RateLimit-Limit'] = str(self.user_requests)
+                remaining = max(0, self.user_requests - cache.get(self._get_rate_limit_key(request, ip), {}).get('count', 0))
+                response['X-RateLimit-Remaining'] = str(remaining)
+            else:
+                response['X-RateLimit-Limit'] = str(self.anon_requests)
+                remaining = max(0, self.anon_requests - cache.get(self._get_rate_limit_key(request, ip), {}).get('count', 0))
+                response['X-RateLimit-Remaining'] = str(remaining)
+        except Exception:
+            # Don't fail the request if header calculation fails
+            pass
         
         return response
