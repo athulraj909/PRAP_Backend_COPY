@@ -179,6 +179,7 @@ class QuestionPublicListView(generics.ListAPIView):
         queryset = Question.objects.select_related('category').filter(status='Active')
         category_param = self.request.query_params.get('category', None)
         if category_param:
+            # Filter by category name (case-insensitive)
             queryset = queryset.filter(category__category_name__iexact=category_param)
         return queryset.order_by('id')
 
@@ -349,7 +350,7 @@ class StudentRegisterView(APIView):
             
             student_data = StudentProfileSerializer(profile).data
 
-            # Send welcome email with credentials
+            # Send welcome email with credentials (non-blocking)
             district_name = profile.district.district_name if profile.district else 'N/A'
             college_name = profile.college.college_name if profile.college else 'N/A'
             course_name = profile.course.course_name if profile.course else 'N/A'
@@ -357,19 +358,26 @@ class StudentRegisterView(APIView):
             # Get the password for email (from temporary field or generated)
             provided_password = profile.password if hasattr(profile, 'password') and profile.password else f"PRAP@{profile.mobile[-4:]}"
             
-            send_welcome_email(
-                student_name=profile.student_name,
-                student_email=profile.email,
-                student_mobile=profile.mobile,
-                password=provided_password,
-                district=district_name,
-                college=college_name,
-                course=course_name
-            )
+            # Send email asynchronously (don't block registration if email fails)
+            try:
+                email_sent = send_welcome_email(
+                    student_name=profile.student_name,
+                    student_email=profile.email,
+                    student_mobile=profile.mobile,
+                    password=provided_password,
+                    district=district_name,
+                    college=college_name,
+                    course=course_name
+                )
+                if not email_sent:
+                    print(f"Warning: Failed to send welcome email to {profile.email}")
+            except Exception as email_error:
+                print(f"Error sending welcome email: {email_error}")
+                # Don't fail registration if email fails
 
             return Response({
                 'success': True,
-                'message': 'Registration successful! Account & password created. Welcome email sent.',
+                'message': 'Registration successful! Your account has been created.',
                 'token': str(refresh.access_token),
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
