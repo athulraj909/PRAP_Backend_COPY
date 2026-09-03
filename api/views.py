@@ -166,6 +166,23 @@ class AssessmentCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminUser]
 
 
+class QuestionPublicListView(generics.ListAPIView):
+    """
+    Public endpoint for students to fetch questions for exams
+    Only returns active questions and optimizes queries
+    """
+    queryset = Question.objects.select_related('category').all()
+    serializer_class = QuestionSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        queryset = Question.objects.select_related('category').filter(status='Active')
+        category_param = self.request.query_params.get('category', None)
+        if category_param:
+            queryset = queryset.filter(category__category_name__iexact=category_param)
+        return queryset.order_by('id')
+
+
 class QuestionListCreateView(generics.ListCreateAPIView):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
