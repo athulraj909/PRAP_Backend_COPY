@@ -666,7 +666,9 @@ class StudentExamSubmitView(APIView):
 
     def post(self, request):
         from .models import AssessmentResult, StudentProfile
-        import secrets
+        import logging
+        
+        logger = logging.getLogger(__name__)
         
         student_data = request.data.get('student')
         answers = request.data.get('answers', {})
@@ -679,21 +681,37 @@ class StudentExamSubmitView(APIView):
         reason = request.data.get('reason', 'Submitted by student')
         resume_token = request.data.get('resumeToken')
         
-        if not student_data or not student_data.get('mobile'):
+        logger.info(f"Exam submission attempt. Student data: {student_data}")
+        logger.info(f"Request data keys: {request.data.keys()}")
+        
+        # Validate required fields
+        if not student_data:
+            logger.error("No student data provided")
             return Response({
                 'success': False,
                 'message': 'Student information is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        mobile = student_data.get('mobile')
+        if not mobile:
+            logger.error(f"No mobile in student data: {student_data}")
+            return Response({
+                'success': False,
+                'message': 'Student mobile number is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
             # Get student profile
-            student_profile = StudentProfile.objects.filter(mobile=student_data['mobile']).first()
+            student_profile = StudentProfile.objects.filter(mobile=mobile).first()
             if not student_profile:
+                logger.warning(f"Student not found with mobile: {mobile}")
                 return Response({
                     'success': False,
                     'message': 'Student not found. Please register first.'
                 }, status=status.HTTP_404_NOT_FOUND)
             
+            logger.info(f"Found student profile: {student_profile.student_name}")
+
             # Verify resume token if provided (optional security layer)
             if resume_token and hasattr(student_profile, 'resume_token'):
                 if student_profile.resume_token != resume_token:
@@ -702,24 +720,38 @@ class StudentExamSubmitView(APIView):
                         'message': 'Invalid resume token'
                     }, status=status.HTTP_403_FORBIDDEN)
 
+            # Validate numeric fields
+            try:
+                score = float(score) if score is not None else 0
+                total_questions = int(total_questions) if total_questions is not None else 0
+                percentage = float(percentage) if percentage is not None else 0
+                time_taken = int(time_taken) if time_taken is not None else 0
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid numeric field: {e}")
+                return Response({
+                    'success': False,
+                    'message': f'Invalid numeric values: {str(e)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             # Create assessment result
             result = AssessmentResult.objects.create(
                 student=student_profile,
-                student_mobile=student_data['mobile'],
+                student_mobile=mobile,
                 student_name=student_data.get('name', student_profile.student_name),
                 college=student_data.get('college', student_profile.college.college_name if student_profile.college else ''),
                 course=student_data.get('course', student_profile.course.course_name if student_profile.course else ''),
                 score=score,
                 total_marks=total_questions,
-                category_breakdown=category_performance,
+                category_breakdown=category_performance if isinstance(category_performance, list) else [],
                 answers={
-                    'answers': answers,
-                    'review': review,
+                    'answers': answers if isinstance(answers, dict) else {},
+                    'review': review if isinstance(review, list) else [],
                     'reason': reason,
                     'timeTaken': time_taken
                 }
             )
             
+            logger.info(f"Exam submitted successfully for student: {mobile}, Result ID: {result.id}")
             return Response({
                 'success': True,
                 'message': 'Exam submitted successfully',
@@ -727,6 +759,7 @@ class StudentExamSubmitView(APIView):
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
+            logger.error(f"Failed to submit exam: {str(e)}", exc_info=True)
             return Response({
                 'success': False,
                 'message': f'Failed to submit exam: {str(e)}'
@@ -737,7 +770,7 @@ class StudentExamResultsView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        from .models import AssessmentResult
+        from .models import AssessmentResult, StudentProfile
         
         mobile = request.query_params.get('mobile')
         if not mobile:
