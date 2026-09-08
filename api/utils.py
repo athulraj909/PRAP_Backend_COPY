@@ -9,16 +9,16 @@ def send_welcome_email(student_name, student_email, student_mobile, password, di
     """
     Send welcome email to newly registered student with their credentials
     """
-    subject = f"{settings.EMAIL_SUBJECT_PREFIX}Welcome to PRAP - Your Account Details"
+    subject = " Welcome to OneTeam Prap - Your Testing Portal Details"
     
     message = f"""
 Dear {student_name},
 
-Welcome to the Placement Readiness Assessment Program (PRAP)!
+Welcome to the Placement Readiness Assessment Program (PRAP) by OneTeam !
 
 We are pleased to inform you that your registration has been successfully completed. Below are your account details:
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STUDENT REGISTRATION DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -40,7 +40,7 @@ Password: {password}
 
 Please keep your credentials safe and do not share them with anyone.
 
-You can log in to the PRAP application using your mobile number and password to:
+You can log in to the ONETEAM PRAP application using your mobile number and password to:
 • Take placement assessments
 • View your performance statistics
 • Track your progress
@@ -49,8 +49,9 @@ You can log in to the PRAP application using your mobile number and password to:
 If you have any questions or need assistance, please contact our support team.
 
 Best regards,
-PRAP Team
-Placement Readiness Assessment Program
+Placement Readiness Assessment Program Team
+OneTeam Solutions EdTech Pvt Ltd
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 This is an automated email. Please do not reply.

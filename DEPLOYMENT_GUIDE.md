@@ -240,7 +240,7 @@ POST /student/exam/submit/
 GET /student/exam/results/?mobile=1234567890
 
 // Admin endpoints (requires admin auth)
-POST /admin/login/
+POST /api/admin/login/
 GET /districts/
 POST /districts/
 GET /questions/
