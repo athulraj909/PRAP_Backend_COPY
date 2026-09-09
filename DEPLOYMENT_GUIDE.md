@@ -4,7 +4,7 @@
 - **Backend**: Django REST Framework hosted on PythonAnywhere
 - **Backend URL**: https://oneteamprap.pythonanywhere.com/
 - **Frontend**: Vercel deployment
-- **Frontend URL**: https://prapfrontendhosted.vercel.app
+- **Frontend URL**: https://www.oneteamprap.com
 
 ---
 
@@ -65,10 +65,10 @@
    ```env
    DEBUG=False
    SECRET_KEY=your-generated-secret-key-here-min-50-chars
-   ALLOWED_HOSTS=oneteamprap.pythonanywhere.com
+   ALLOWED_HOSTS=oneteamprap.pythonanywhere.com,www.oneteamprap.com,oneteamprap.com
    EMAIL_HOST_USER=oneteamprap@gmail.com
    EMAIL_HOST_PASSWORD=your-gmail-app-password
-   CORS_ALLOWED_ORIGINS=https://prapfrontendhosted.vercel.app
+   CORS_ALLOWED_ORIGINS=https://www.oneteamprap.com,https://oneteamprap.com
    SECURE_SSL_REDIRECT=True
    SESSION_COOKIE_SECURE=True
    CSRF_COOKIE_SECURE=True
@@ -210,13 +210,14 @@ Set these in your Vercel project settings:
 
 ```env
 NEXT_PUBLIC_API_URL=https://oneteamprap.pythonanywhere.com/api
-NEXT_PUBLIC_APP_URL=https://prapfrontendhosted.vercel.app
+NEXT_PUBLIC_APP_URL=https://www.oneteamprap.com
 ```
 
 ### 2. CORS Configuration
 
 The backend is already configured to allow requests from:
-- `https://prapfrontendhosted.vercel.app`
+- `https://www.oneteamprap.com`
+- `https://oneteamprap.com`
 
 ### 3. API Endpoints
 
