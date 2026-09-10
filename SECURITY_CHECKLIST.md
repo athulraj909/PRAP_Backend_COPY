@@ -98,7 +98,7 @@ EMAIL_HOST_PASSWORD=your-gmail-app-password
 Ensure these are correct in `.env.production`:
 ```env
 ALLOWED_HOSTS=oneteamprap.pythonanywhere.com
-CORS_ALLOWED_ORIGINS=https://www.oneteamprap.com,https://oneteamprap.com
+CORS_ALLOWED_ORIGINS=https://www.oneteamprap.com,https://oneteamprap.com,https://prapfrontendhosted.vercel.app
 ```
 
 ### 4. Set Production Security Flags

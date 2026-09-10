@@ -30,7 +30,7 @@ class SecurityHeadersMiddleware:
                 "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
                 "img-src 'self' data: https:",
                 "font-src 'self' data:",
-                "connect-src 'self' https://oneteamprap.pythonanywhere.com https://www.oneteamprap.com https://oneteamprap.com",
+                "connect-src 'self' https://oneteamprap.pythonanywhere.com https://www.oneteamprap.com https://oneteamprap.com https://prapfrontendhosted.vercel.app",
                 "frame-ancestors 'none'",
                 "base-uri 'self'",
                 "form-action 'self'",

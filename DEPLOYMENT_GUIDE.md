@@ -68,7 +68,7 @@
    ALLOWED_HOSTS=oneteamprap.pythonanywhere.com,www.oneteamprap.com,oneteamprap.com
    EMAIL_HOST_USER=oneteamprap@gmail.com
    EMAIL_HOST_PASSWORD=your-gmail-app-password
-   CORS_ALLOWED_ORIGINS=https://www.oneteamprap.com,https://oneteamprap.com
+   CORS_ALLOWED_ORIGINS=https://www.oneteamprap.com,https://oneteamprap.com,https://prapfrontendhosted.vercel.app
    SECURE_SSL_REDIRECT=True
    SESSION_COOKIE_SECURE=True
    CSRF_COOKIE_SECURE=True
@@ -218,6 +218,7 @@ NEXT_PUBLIC_APP_URL=https://www.oneteamprap.com
 The backend is already configured to allow requests from:
 - `https://www.oneteamprap.com`
 - `https://oneteamprap.com`
+- `https://prapfrontendhosted.vercel.app` (legacy - can be removed after migration)
 
 ### 3. API Endpoints
 

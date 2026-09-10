@@ -469,10 +469,12 @@ class StudentListView(generics.ListAPIView):
         
         if search:
             queryset = queryset.filter(
-                student_name__icontains=search
-            ).filter(
+                models.Q(student_name__icontains=search) |
                 models.Q(email__icontains=search) |
-                models.Q(mobile__icontains=search)
+                models.Q(mobile__icontains=search) |
+                models.Q(district__district_name__icontains=search) |
+                models.Q(college__college_name__icontains=search) |
+                models.Q(course__course_name__icontains=search)
             )
         
         return queryset.order_by('-registered_at')
