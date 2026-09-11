@@ -90,6 +90,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     college = serializers.SerializerMethodField()
     course = serializers.SerializerMethodField()
     registeredAt = serializers.DateTimeField(source='registered_at', read_only=True)
+    passoutYear = serializers.CharField(source='passout_year', required=False)
 
     class Meta:
         model = StudentProfile
@@ -104,6 +105,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             'course',
             'registered_at',
             'registeredAt',
+            'passoutYear',
         ]
         extra_kwargs = {
             'password': {'write_only': True, 'required': False}  # Temporary: Include for migration
@@ -124,6 +126,7 @@ class StudentRegisterSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, allow_blank=True)
     email = serializers.EmailField()
     mobile = serializers.CharField(max_length=15)
+    passoutYear = serializers.CharField()
     password = serializers.CharField(required=False, allow_blank=True, write_only=True)
     district = serializers.CharField(required=False, allow_blank=True)
     college = serializers.CharField(required=False, allow_blank=True)
@@ -148,6 +151,7 @@ class StudentRegisterSerializer(serializers.Serializer):
         student_name = validated_data.get('studentName') or validated_data.get('name') or "Student"
         email = validated_data.get('email')
         mobile = validated_data.get('mobile')
+        passout_year = validated_data.get('passoutYear')
         provided_password = validated_data.get('password')
 
         # Auto-generate password if not provided (PRAP@ + last 4 digits of mobile)
@@ -212,6 +216,7 @@ class StudentRegisterSerializer(serializers.Serializer):
             student_name=student_name,
             email=email,
             mobile=mobile,
+            passout_year=passout_year,
             password=provided_password,  # Temporary: Store password for migration
             district=district_obj,
             college=college_obj,

@@ -62,7 +62,7 @@ class QuestionAdmin(admin.ModelAdmin):
 
 @admin.register(StudentProfile)
 class StudentProfileAdmin(admin.ModelAdmin):
-    list_display = ('id', 'student_name', 'mobile', 'email', 'college', 'course', 'registered_at')
+    list_display = ('id', 'student_name', 'mobile', 'email', 'college', 'course', 'passout_year', 'registered_at')
     search_fields = ('student_name', 'mobile', 'email')
 
 
