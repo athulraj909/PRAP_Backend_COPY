@@ -20,10 +20,11 @@ class DistrictSerializer(serializers.ModelSerializer):
 class CollegeSerializer(serializers.ModelSerializer):
     collegeName = serializers.CharField(source='college_name', required=True)
     districtName = serializers.CharField(source='district.district_name', read_only=True)
+    studentCount = serializers.IntegerField(source='student_count', read_only=True, default=0)
 
     class Meta:
         model = College
-        fields = ['id', 'collegeName', 'district', 'districtName', 'status']
+        fields = ['id', 'collegeName', 'district', 'districtName', 'status', 'studentCount']
         extra_kwargs = {
             'college_name': {'write_only': True},
             'district': {'write_only': True}

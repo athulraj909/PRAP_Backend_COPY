@@ -5,6 +5,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import authenticate
 from django.db import models
+from django.db.models import Count
 from django.core.cache import cache
 from .models import District, College, Course, StudentProfile, AssessmentCategory, Question, ExamSettings
 from .serializers import (
@@ -65,12 +66,12 @@ class DistrictDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class CollegePublicListView(generics.ListAPIView):
-    queryset = College.objects.all()
+    queryset = College.objects.annotate(student_count=Count('studentprofile', distinct=True)).all()
     serializer_class = CollegeSerializer
     permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
-        queryset = College.objects.all()
+        queryset = College.objects.annotate(student_count=Count('studentprofile', distinct=True))
         district_param = self.request.query_params.get('district', None)
         status_param = self.request.query_params.get('status', None)
         if district_param:
@@ -81,12 +82,12 @@ class CollegePublicListView(generics.ListAPIView):
 
 
 class CollegeListCreateView(generics.ListCreateAPIView):
-    queryset = College.objects.all()
+    queryset = College.objects.annotate(student_count=Count('studentprofile', distinct=True)).all()
     serializer_class = CollegeSerializer
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
-        queryset = College.objects.all()
+        queryset = College.objects.annotate(student_count=Count('studentprofile', distinct=True))
         district_param = self.request.query_params.get('district', None)
         status_param = self.request.query_params.get('status', None)
         if district_param:
