@@ -501,7 +501,7 @@ class StudentPerformanceBulkView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Cache key for this request
-        cache_key = f'student_performance_bulk_{"_".join(sorted(mobiles))}'
+        cache_key = f'student_performance_bulk_v2_{"_".join(sorted(mobiles))}'
         cached_data = cache.get(cache_key)
         
         if cached_data:
@@ -534,6 +534,7 @@ class StudentPerformanceBulkView(APIView):
                         'avgPercentage': avg_percentage,
                         'latestPercentage': round((student_results[0].score / student_results[0].total_marks) * 100) if student_results[0].total_marks > 0 else 0,
                         'latestDate': student_results[0].completed_at.isoformat(),
+                        'latestTimeTaken': (student_results[0].answers or {}).get('timeTaken', 0),
                         'categoryPerformance': student_results[0].category_breakdown or [],
                     }
                 else:
@@ -544,6 +545,7 @@ class StudentPerformanceBulkView(APIView):
                         'avgPercentage': 0,
                         'latestPercentage': 0,
                         'latestDate': None,
+                        'latestTimeTaken': 0,
                         'categoryPerformance': [],
                     }
             
