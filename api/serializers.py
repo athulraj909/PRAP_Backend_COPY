@@ -148,6 +148,22 @@ class StudentRegisterSerializer(serializers.Serializer):
             raise serializers.ValidationError("This mobile number is already registered")
         return clean_mobile
 
+    def validate_course(self, value):
+        course_input = value.strip()
+        if not course_input:
+            return None
+
+        course = None
+        if course_input.isdigit():
+            course = Course.objects.filter(pk=int(course_input)).first()
+        if course is None:
+            course = Course.objects.filter(course_name__iexact=course_input).first()
+        if course is None:
+            raise serializers.ValidationError(
+                "Selected course is unavailable. Please choose a course from the list."
+            )
+        return course
+
     def create(self, validated_data):
         student_name = validated_data.get('studentName') or validated_data.get('name') or "Student"
         email = validated_data.get('email')
@@ -186,17 +202,7 @@ class StudentRegisterSerializer(serializers.Serializer):
                     defaults={'district': default_dist}
                 )
 
-        # Resolve or get_or_create Course
-        course_input = validated_data.get('course')
-        course_obj = None
-        if course_input:
-            if str(course_input).isdigit():
-                course_obj = Course.objects.filter(id=int(course_input)).first()
-            if not course_obj:
-                course_obj, _ = Course.objects.get_or_create(
-                    course_name=course_input,
-                    defaults={'duration': '3 Years'}
-                )
+        course_obj = validated_data.get('course')
 
         # Create Django User for Auth
         user, created = User.objects.get_or_create(
