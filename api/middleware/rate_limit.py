@@ -23,12 +23,14 @@ class RateLimitMiddleware:
         self.get_response = get_response
         
         # Get rate limits from settings or use defaults
-        self.anon_limit = getattr(settings, 'RATE_LIMIT_ANON', '100/hour')
-        self.user_limit = getattr(settings, 'RATE_LIMIT_USER', '1000/hour')
+        self.anon_limit = getattr(settings, 'RATE_LIMIT_ANON', '50/hour')
+        self.user_limit = getattr(settings, 'RATE_LIMIT_USER', '500/hour')
+        self.public_limit = getattr(settings, 'RATE_LIMIT_PUBLIC_ENDPOINTS', '100/hour')
         
         # Parse rate limits (cached in __init__ to avoid repeated parsing)
         self.anon_requests, self.anon_period = self._parse_rate_limit(self.anon_limit)
         self.user_requests, self.user_period = self._parse_rate_limit(self.user_limit)
+        self.public_requests, self.public_period = self._parse_rate_limit(self.public_limit)
         
         # Cache for IP addresses to avoid repeated parsing
         self.ip_cache = {}
@@ -84,24 +86,30 @@ class RateLimitMiddleware:
         """Check if request should be rate limited"""
         key = self._get_rate_limit_key(request, ip)
         
-        # Get current request count and timestamp
-        data = cache.get(key)
+        # Determine appropriate limit based on endpoint type and authentication
+        public_endpoints = ['/public/', '/student/exam/']
+        is_public_endpoint = any(request.path.startswith(endpoint) for endpoint in public_endpoints)
         
-        if data is None:
-            # First request in window
-            cache.set(key, {'count': 1, 'start_time': time.time()}, self.anon_period if not request.user.is_authenticated else self.user_period)
-            return True
-        
-        current_time = time.time()
-        elapsed = current_time - data['start_time']
-        
-        # Determine appropriate limit based on authentication
-        if request.user.is_authenticated:
+        if is_public_endpoint:
+            limit = self.public_requests
+            period = self.public_period
+        elif request.user.is_authenticated:
             limit = self.user_requests
             period = self.user_period
         else:
             limit = self.anon_requests
             period = self.anon_period
+        
+        # Get current request count and timestamp
+        data = cache.get(key)
+        
+        if data is None:
+            # First request in window
+            cache.set(key, {'count': 1, 'start_time': time.time()}, period)
+            return True
+        
+        current_time = time.time()
+        elapsed = current_time - data['start_time']
         
         # Reset if period has elapsed
         if elapsed >= period:
@@ -119,27 +127,44 @@ class RateLimitMiddleware:
         return True
     
     def __call__(self, request):
-        # Skip rate limiting for static files, admin, and safe methods
+        # Skip rate limiting for static files and admin only
+        # DO NOT skip for GET requests to prevent abuse of public endpoints
         if (request.path.startswith('/static/') or 
-            request.path.startswith('/admin/') or
-            request.method in ['GET', 'HEAD', 'OPTIONS']):
+            request.path.startswith('/admin/')):
             return self.get_response(request)
         
         ip = self._get_client_ip(request)
         
         # Check rate limit
         if not self._check_rate_limit(request, ip):
+            public_endpoints = ['/public/', '/student/exam/']
+            is_public_endpoint = any(request.path.startswith(endpoint) for endpoint in public_endpoints)
+            
+            if is_public_endpoint:
+                retry_after = self.public_period
+            elif request.user.is_authenticated:
+                retry_after = self.user_period
+            else:
+                retry_after = self.anon_period
+                
             return JsonResponse({
                 'error': 'Rate limit exceeded',
                 'message': 'Too many requests. Please try again later.',
-                'retry_after': self.anon_period if not request.user.is_authenticated else self.user_period
+                'retry_after': str(retry_after)
             }, status=429)
         
         response = self.get_response(request)
         
         # Add rate limit headers (simplified to reduce cache operations)
         try:
-            if request.user.is_authenticated:
+            public_endpoints = ['/public/', '/student/exam/']
+            is_public_endpoint = any(request.path.startswith(endpoint) for endpoint in public_endpoints)
+            
+            if is_public_endpoint:
+                response['X-RateLimit-Limit'] = str(self.public_requests)
+                remaining = max(0, self.public_requests - cache.get(self._get_rate_limit_key(request, ip), {}).get('count', 0))
+                response['X-RateLimit-Remaining'] = str(remaining)
+            elif request.user.is_authenticated:
                 response['X-RateLimit-Limit'] = str(self.user_requests)
                 remaining = max(0, self.user_requests - cache.get(self._get_rate_limit_key(request, ip), {}).get('count', 0))
                 response['X-RateLimit-Remaining'] = str(remaining)

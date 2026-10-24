@@ -21,9 +21,9 @@ class SecurityHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         
-        # Only add headers in production
+        # Add security headers in both production and development (with appropriate settings)
+        # Content Security Policy (CSP)
         if not settings.DEBUG:
-            # Content Security Policy (CSP)
             csp_directives = [
                 "default-src 'self'",
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
@@ -36,33 +36,52 @@ class SecurityHeadersMiddleware:
                 "form-action 'self'",
             ]
             response['Content-Security-Policy'] = '; '.join(csp_directives)
-            
-            # Strict-Transport-Security (HSTS)
-            response['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
-            
-            # X-Content-Type-Options
-            response['X-Content-Type-Options'] = 'nosniff'
-            
-            # X-Frame-Options
-            response['X-Frame-Options'] = 'DENY'
-            
-            # X-XSS-Protection
-            response['X-XSS-Protection'] = '1; mode=block'
-            
-            # Referrer-Policy
-            response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-            
-            # Permissions-Policy
-            permissions_directives = [
-                "geolocation=()",
-                "microphone=()",
-                "camera=()",
-                "payment=()",
+        else:
+            # Relaxed CSP for development
+            csp_directives = [
+                "default-src 'self' 'unsafe-inline' 'unsafe-eval'",
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+                "img-src 'self' data: https:",
+                "font-src 'self' data:",
+                "connect-src 'self' http://localhost:* http://127.0.0.1:*",
             ]
-            response['Permissions-Policy'] = ', '.join(permissions_directives)
-            
-            # Remove server information (Django response doesn't have pop method)
-            if 'Server' in response:
-                del response['Server']
-            
+            response['Content-Security-Policy-Report-Only'] = '; '.join(csp_directives)
+        
+        # Strict-Transport-Security (HSTS) - only in production with HTTPS
+        if not settings.DEBUG:
+            response['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+        
+        # X-Content-Type-Options
+        response['X-Content-Type-Options'] = 'nosniff'
+        
+        # X-Frame-Options
+        response['X-Frame-Options'] = 'DENY'
+        
+        # X-XSS-Protection
+        response['X-XSS-Protection'] = '1; mode=block'
+        
+        # Referrer-Policy
+        response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        
+        # Permissions-Policy
+        permissions_directives = [
+            "geolocation=()",
+            "microphone=()",
+            "camera=()",
+            "payment=()",
+            "usb=()",
+            "bluetooth=()",
+        ]
+        response['Permissions-Policy'] = ', '.join(permissions_directives)
+        
+        # Remove server information
+        if 'Server' in response:
+            del response['Server']
+        
+        # Add additional security headers
+        response['X-Permitted-Cross-Domain-Policies'] = 'none'
+        response['Cross-Origin-Opener-Policy'] = 'same-origin'
+        response['Cross-Origin-Resource-Policy'] = 'same-origin'
+        
         return response

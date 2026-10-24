@@ -14,10 +14,12 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-jwz1=6!%rxhu#_xu+b9oz1*!!hszne3&$)m@s&v5*oz5rdz^9g')
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable must be set")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
@@ -149,6 +151,7 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-api-key',  # Added for API key authentication
 ]
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -157,6 +160,11 @@ CORS_ALLOW_METHODS = [
     'PATCH',
     'POST',
     'PUT',
+]
+CORS_EXPOSE_HEADERS = [
+    'X-RateLimit-Limit',
+    'X-RateLimit-Remaining',
+    'Retry-After',
 ]
 
 # Email Configuration
@@ -178,6 +186,9 @@ USE_TZ = True
 # Static files
 STATIC_URL = 'static/'
 
+# API Key Authentication for Public Endpoints
+VALID_API_KEYS = os.getenv('VALID_API_KEYS', '').split(',') if os.getenv('VALID_API_KEYS') else []
+
 # Security Settings for Production
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() == 'True'
@@ -194,8 +205,9 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     
 # Rate Limiting Settings
-RATE_LIMIT_ANON = os.getenv('RATE_LIMIT_ANON', '200/hour')
-RATE_LIMIT_USER = os.getenv('RATE_LIMIT_USER', '5000/hour')
+RATE_LIMIT_ANON = os.getenv('RATE_LIMIT_ANON', '50/hour')
+RATE_LIMIT_USER = os.getenv('RATE_LIMIT_USER', '500/hour')
+RATE_LIMIT_PUBLIC_ENDPOINTS = os.getenv('RATE_LIMIT_PUBLIC_ENDPOINTS', '100/hour')
 
 # IP Security Settings
 BLOCKED_IPS = []  # Add permanently blocked IPs here

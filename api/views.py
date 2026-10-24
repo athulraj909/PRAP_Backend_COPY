@@ -1,12 +1,14 @@
+import logging
+
+from django.contrib.auth import authenticate
+from django.core.cache import cache
+from django.db import IntegrityError, models, transaction
+from django.db.models import Count
 from rest_framework import status, generics, permissions, pagination
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
-from django.contrib.auth import authenticate
-from django.db import models
-from django.db.models import Count
-from django.core.cache import cache
 from .models import District, College, Course, StudentProfile, AssessmentCategory, Question, ExamSettings
 from .serializers import (
     DistrictSerializer,
@@ -20,6 +22,10 @@ from .serializers import (
     ExamSettingsSerializer
 )
 from .utils import send_welcome_email
+from .authentication import APIKeyAuthentication
+
+
+logger = logging.getLogger(__name__)
 
 
 class StandardResultsSetPagination(pagination.PageNumberPagination):
@@ -37,6 +43,7 @@ class DistrictPublicListView(generics.ListAPIView):
     queryset = District.objects.all()
     serializer_class = DistrictSerializer
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [APIKeyAuthentication]
 
     def get_queryset(self):
         queryset = District.objects.all()
@@ -69,6 +76,7 @@ class CollegePublicListView(generics.ListAPIView):
     queryset = College.objects.annotate(student_count=Count('studentprofile', distinct=True)).all()
     serializer_class = CollegeSerializer
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [APIKeyAuthentication]
 
     def get_queryset(self):
         queryset = College.objects.annotate(student_count=Count('studentprofile', distinct=True))
@@ -107,6 +115,7 @@ class CoursePublicListView(generics.ListAPIView):
     queryset = Course.objects.all()
     serializer_class = CourseSerializer
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [APIKeyAuthentication]
 
     def get_queryset(self):
         queryset = Course.objects.all()
@@ -139,6 +148,7 @@ class AssessmentCategoryPublicListView(generics.ListAPIView):
     queryset = AssessmentCategory.objects.all()
     serializer_class = AssessmentCategorySerializer
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [APIKeyAuthentication]
 
     def get_queryset(self):
         queryset = AssessmentCategory.objects.all()
@@ -171,10 +181,12 @@ class QuestionPublicListView(generics.ListAPIView):
     """
     Public endpoint for students to fetch questions for exams
     Only returns active questions and optimizes queries
+    Requires API key authentication to prevent unauthorized access
     """
     queryset = Question.objects.select_related('category').all()
     serializer_class = QuestionSerializer
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [APIKeyAuthentication]
 
     def get_queryset(self):
         queryset = Question.objects.select_related('category').filter(status='Active')
@@ -344,8 +356,26 @@ class StudentRegisterView(APIView):
 
     def post(self, request):
         serializer = StudentRegisterSerializer(data=request.data)
-        if serializer.is_valid():
-            profile = serializer.save()
+        if not serializer.is_valid():
+            # Return first error message clearly for frontend
+            error_msg = "Validation failed"
+            if serializer.errors:
+                for field, errors in serializer.errors.items():
+                    if isinstance(errors, list) and len(errors) > 0:
+                        error_msg = str(errors[0])
+                        break
+                    elif isinstance(errors, str):
+                        error_msg = errors
+                        break
+            return Response({
+                'success': False,
+                'message': error_msg,
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                profile = serializer.save()
             user = profile.user
             refresh = RefreshToken.for_user(user) if user else RefreshToken()
             
@@ -385,22 +415,18 @@ class StudentRegisterView(APIView):
                 'user': student_data,
                 'student': student_data
             }, status=status.HTTP_201_CREATED)
-        
-        # Return first error message clearly for frontend
-        error_msg = "Validation failed"
-        if serializer.errors:
-            for field, errors in serializer.errors.items():
-                if isinstance(errors, list) and len(errors) > 0:
-                    error_msg = str(errors[0])
-                    break
-                elif isinstance(errors, str):
-                    error_msg = errors
-                    break
-        return Response({
-            'success': False,
-            'message': error_msg,
-            'errors': serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError:
+            logger.exception("Student registration failed due to a database conflict")
+            return Response({
+                'success': False,
+                'message': 'This email address or mobile number is already registered.'
+            }, status=status.HTTP_409_CONFLICT)
+        except Exception:
+            logger.exception("Unexpected student registration failure")
+            return Response({
+                'success': False,
+                'message': 'Registration could not be completed. Please try again later.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class StudentLoginView(APIView):
@@ -650,8 +676,9 @@ class ExamSettingsView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ExamSettingsPublicView(generics.ListAPIView):
+class ExamSettingsPublicView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [APIKeyAuthentication]
 
     def get(self, request):
         # Public endpoint for students to fetch exam settings
@@ -667,7 +694,12 @@ class ExamSettingsPublicView(generics.ListAPIView):
 
 
 class StudentExamSubmitView(APIView):
+    """
+    Secure endpoint for students to submit exam results
+    Requires API key authentication to prevent unauthorized submissions
+    """
     permission_classes = [permissions.AllowAny]
+    authentication_classes = [APIKeyAuthentication]
 
     def post(self, request):
         from .models import AssessmentResult, StudentProfile
@@ -772,19 +804,34 @@ class StudentExamSubmitView(APIView):
 
 
 class StudentExamResultsView(APIView):
-    permission_classes = [permissions.AllowAny]
+    """
+    Secure endpoint for students to fetch their exam results
+    Requires authentication to prevent unauthorized access to student data
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [APIKeyAuthentication]
 
     def get(self, request):
         from .models import AssessmentResult, StudentProfile
-        
-        mobile = request.query_params.get('mobile')
-        if not mobile:
-            return Response({
-                'success': False,
-                'message': 'Mobile number is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        import re
         
         try:
+            # Get student profile from authenticated user
+            # For API key auth, we need to get mobile from query param but verify it exists
+            mobile = request.query_params.get('mobile')
+            if not mobile:
+                return Response({
+                    'success': False,
+                    'message': 'Mobile number is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate mobile number format (exactly 10 digits)
+            if not re.match(r'^\d{10}$', mobile):
+                return Response({
+                    'success': False,
+                    'message': 'Invalid mobile number format. Must be 10 digits.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
             # Verify that the mobile number belongs to a registered student
             student_profile = StudentProfile.objects.filter(mobile=mobile).first()
             if not student_profile:
@@ -793,7 +840,8 @@ class StudentExamResultsView(APIView):
                     'message': 'Student not found'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            results = AssessmentResult.objects.filter(student_mobile=mobile).order_by('-completed_at')
+            # Limit results to prevent data leakage
+            results = AssessmentResult.objects.filter(student_mobile=mobile).order_by('-completed_at')[:50]
             results_data = []
             
             for result in results:
