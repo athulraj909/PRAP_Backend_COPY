@@ -421,7 +421,8 @@ class StudentRegisterView(APIView):
                 'success': False,
                 'message': 'This email address or mobile number is already registered.'
             }, status=status.HTTP_409_CONFLICT)
-        except Exception:
+        except Exception as e:
+            print("Exception Occured : ",e)
             logger.exception("Unexpected student registration failure")
             return Response({
                 'success': False,
