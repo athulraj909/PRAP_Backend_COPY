@@ -18,14 +18,21 @@ class RateLimitMiddleware:
     """
     Middleware to implement rate limiting based on IP address and user authentication
     """
+
+    public_endpoint_prefixes = (
+        '/public/',
+        '/api/public/',
+        '/student/exam/',
+        '/api/student/exam/',
+    )
     
     def __init__(self, get_response):
         self.get_response = get_response
         
         # Get rate limits from settings or use defaults
-        self.anon_limit = getattr(settings, 'RATE_LIMIT_ANON', '50/hour')
+        self.anon_limit = getattr(settings, 'RATE_LIMIT_ANON', '1000/hour')
         self.user_limit = getattr(settings, 'RATE_LIMIT_USER', '500/hour')
-        self.public_limit = getattr(settings, 'RATE_LIMIT_PUBLIC_ENDPOINTS', '100/hour')
+        self.public_limit = getattr(settings, 'RATE_LIMIT_PUBLIC_ENDPOINTS', '1000/hour')
         
         # Parse rate limits (cached in __init__ to avoid repeated parsing)
         self.anon_requests, self.anon_period = self._parse_rate_limit(self.anon_limit)
@@ -82,15 +89,15 @@ class RateLimitMiddleware:
             key = f"rate_limit:anon_{ip_hash}"
         return key
     
+    def _is_public_endpoint(self, request):
+        return request.path_info.startswith(self.public_endpoint_prefixes)
+
     def _check_rate_limit(self, request, ip):
         """Check if request should be rate limited"""
         key = self._get_rate_limit_key(request, ip)
         
         # Determine appropriate limit based on endpoint type and authentication
-        public_endpoints = ['/public/', '/student/exam/']
-        is_public_endpoint = any(request.path.startswith(endpoint) for endpoint in public_endpoints)
-        
-        if is_public_endpoint:
+        if self._is_public_endpoint(request):
             limit = self.public_requests
             period = self.public_period
         elif request.user.is_authenticated:
@@ -137,10 +144,7 @@ class RateLimitMiddleware:
         
         # Check rate limit
         if not self._check_rate_limit(request, ip):
-            public_endpoints = ['/public/', '/student/exam/']
-            is_public_endpoint = any(request.path.startswith(endpoint) for endpoint in public_endpoints)
-            
-            if is_public_endpoint:
+            if self._is_public_endpoint(request):
                 retry_after = self.public_period
             elif request.user.is_authenticated:
                 retry_after = self.user_period
@@ -157,10 +161,7 @@ class RateLimitMiddleware:
         
         # Add rate limit headers (simplified to reduce cache operations)
         try:
-            public_endpoints = ['/public/', '/student/exam/']
-            is_public_endpoint = any(request.path.startswith(endpoint) for endpoint in public_endpoints)
-            
-            if is_public_endpoint:
+            if self._is_public_endpoint(request):
                 response['X-RateLimit-Limit'] = str(self.public_requests)
                 remaining = max(0, self.public_requests - cache.get(self._get_rate_limit_key(request, ip), {}).get('count', 0))
                 response['X-RateLimit-Remaining'] = str(remaining)

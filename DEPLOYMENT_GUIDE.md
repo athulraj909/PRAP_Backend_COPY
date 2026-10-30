@@ -72,7 +72,14 @@
    SECURE_SSL_REDIRECT=True
    SESSION_COOKIE_SECURE=True
    CSRF_COOKIE_SECURE=True
+   RATE_LIMIT_ANON=1000/hour
+   RATE_LIMIT_PUBLIC_ENDPOINTS=1000/hour
+   API_ANON_THROTTLE_RATE=1000/hour
    ```
+
+   These limits are per IP address for anonymous traffic. Update any existing
+   rate-limit environment values in the PythonAnywhere configuration and reload
+   the web app after deploying; existing environment values override code defaults.
 
 3. **Generate SECRET_KEY** (if not already):
    ```bash
@@ -184,7 +191,8 @@ The application includes comprehensive security middleware:
 - X-Content-Type-Options
 
 ### 2. Rate Limiting Middleware
-- Anonymous users: 100 requests/hour
+- Anonymous users: 1000 requests/hour
+- Public endpoints: 1000 requests/hour
 - Authenticated users: 1000 requests/hour
 - Configurable via environment variables
 
@@ -306,7 +314,7 @@ Use PythonAnywhere's built-in backup tools or pg_dump.
 - Ensure token lifetime is appropriate
 
 **4. Rate Limiting Issues**
-- Adjust RATE_LIMIT_ANON and RATE_LIMIT_USER in .env
+- Adjust RATE_LIMIT_ANON, RATE_LIMIT_PUBLIC_ENDPOINTS, and API_ANON_THROTTLE_RATE in .env
 - Check cache configuration for rate limiting
 - Review blocked IPs in logs
 

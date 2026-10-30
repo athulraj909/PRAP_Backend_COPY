@@ -1,9 +1,47 @@
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.contrib.auth.models import AnonymousUser
+from django.core.cache import cache
+from django.test import RequestFactory, TestCase, override_settings
 from rest_framework.test import APIClient
 
+from .middleware.rate_limit import RateLimitMiddleware
 from .models import Course, StudentProfile
+
+
+class RateLimitMiddlewareTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        cache.clear()
+
+    @override_settings(
+        RATE_LIMIT_ANON='1/hour',
+        RATE_LIMIT_PUBLIC_ENDPOINTS='101/hour',
+    )
+    def test_api_prefixed_public_endpoint_uses_public_limit(self):
+        middleware = RateLimitMiddleware(lambda request: None)
+        request = self.factory.get(
+            '/api/public/districts/',
+            REMOTE_ADDR='192.0.2.1',
+        )
+        request.user = AnonymousUser()
+
+        for _ in range(101):
+            self.assertTrue(middleware._check_rate_limit(request, '192.0.2.1'))
+
+        self.assertFalse(middleware._check_rate_limit(request, '192.0.2.1'))
+
+    @override_settings(RATE_LIMIT_ANON='1000/hour')
+    def test_configured_anonymous_limit_allows_more_than_100_requests(self):
+        middleware = RateLimitMiddleware(lambda request: None)
+        request = self.factory.post(
+            '/api/student/login/',
+            REMOTE_ADDR='192.0.2.2',
+        )
+        request.user = AnonymousUser()
+
+        for _ in range(101):
+            self.assertTrue(middleware._check_rate_limit(request, '192.0.2.2'))
 
 
 class StudentRegistrationTests(TestCase):

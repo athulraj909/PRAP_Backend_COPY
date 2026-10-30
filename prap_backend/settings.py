@@ -116,7 +116,7 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle'
     ),
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',
+        'anon': os.getenv('API_ANON_THROTTLE_RATE', '1000/hour'),
         'user': '1000/hour'
     }
 }
@@ -205,9 +205,9 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     
 # Rate Limiting Settings
-RATE_LIMIT_ANON = os.getenv('RATE_LIMIT_ANON', '50/hour')
+RATE_LIMIT_ANON = os.getenv('RATE_LIMIT_ANON', '1000/hour')
 RATE_LIMIT_USER = os.getenv('RATE_LIMIT_USER', '500/hour')
-RATE_LIMIT_PUBLIC_ENDPOINTS = os.getenv('RATE_LIMIT_PUBLIC_ENDPOINTS', '100/hour')
+RATE_LIMIT_PUBLIC_ENDPOINTS = os.getenv('RATE_LIMIT_PUBLIC_ENDPOINTS', '1000/hour')
 
 # IP Security Settings
 BLOCKED_IPS = []  # Add permanently blocked IPs here

@@ -27,7 +27,7 @@
 
 3. **Cache Operations**: Added try-except around header calculations to prevent failures
 
-4. **Skip Safe Methods**: Added GET, HEAD, OPTIONS to skip list for non-critical endpoints
+4. **Public path matching**: Public endpoints mounted under `/api/` are recognized, so they use the public limit instead of the lower anonymous limit. GET requests remain rate limited.
 
 5. **Optimized Cache Key Generation**: Reduced string operations in key generation
 
@@ -200,6 +200,8 @@ Adjust these settings in `.env`:
 # Increase rate limits for legitimate traffic
 RATE_LIMIT_ANON=500/hour
 RATE_LIMIT_USER=5000/hour
+RATE_LIMIT_PUBLIC_ENDPOINTS=1000/hour
+API_ANON_THROTTLE_RATE=1000/hour
 
 # Reduce security checks for performance
 REQUIRE_USER_AGENT=False
@@ -220,6 +222,8 @@ Keep current settings but consider:
 # Stricter rate limits
 RATE_LIMIT_ANON=50/hour
 RATE_LIMIT_USER=500/hour
+RATE_LIMIT_PUBLIC_ENDPOINTS=1000/hour
+API_ANON_THROTTLE_RATE=50/hour
 
 # Enable all security checks
 REQUIRE_USER_AGENT=True

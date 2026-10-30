@@ -18,7 +18,7 @@ This document outlines the security measures implemented in the PRAP backend API
 ### 3. Rate Limiting Bypass
 - **Issue**: GET requests were exempt from rate limiting, allowing abuse of public endpoints
 - **Fix**: Removed GET exemption and implemented separate rate limits for public endpoints
-- **Configuration**: `RATE_LIMIT_PUBLIC_ENDPOINTS=100/hour`
+- **Configuration**: Public routes use `RATE_LIMIT_PUBLIC_ENDPOINTS` (default: `1000/hour`).
 
 ### 4. Default Insecure Configuration
 - **Issue**: Default SECRET_KEY and DEBUG=True in settings
@@ -45,9 +45,10 @@ All public data endpoints now require API key authentication:
 
 ### Rate Limiting
 Tiered rate limiting for different endpoint types:
-- Anonymous users: 50 requests/hour
+- Anonymous users: 1000 requests/hour
 - Authenticated users: 500 requests/hour
-- Public endpoints: 100 requests/hour
+- Public endpoints: 1000 requests/hour
+- DRF anonymous throttle: 1000 requests/hour (`API_ANON_THROTTLE_RATE`)
 
 ### IP Security
 - Automatic IP blocking after 5 failed login attempts
@@ -95,9 +96,10 @@ SESSION_COOKIE_SECURE=True
 CSRF_COOKIE_SECURE=True
 
 # Rate Limiting
-RATE_LIMIT_ANON=50/hour
+RATE_LIMIT_ANON=1000/hour
 RATE_LIMIT_USER=500/hour
-RATE_LIMIT_PUBLIC_ENDPOINTS=100/hour
+RATE_LIMIT_PUBLIC_ENDPOINTS=1000/hour
+API_ANON_THROTTLE_RATE=1000/hour
 
 # IP Security
 MAX_FAILED_ATTEMPTS=5

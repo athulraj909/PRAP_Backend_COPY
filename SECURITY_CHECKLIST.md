@@ -28,8 +28,8 @@
   - Permissions-Policy
 
 - ✅ Rate Limiting Middleware
-  - Anonymous users: 100 requests/hour
-  - Authenticated users: 1000 requests/hour
+  - Anonymous users: 1000 requests/hour by default
+  - Public endpoints: 1000 requests/hour by default
   - IP-based tracking
   - Configurable limits via environment variables
 
@@ -164,7 +164,7 @@ CSRF_COOKIE_SECURE=True
 - [ ] Test preflight requests
 
 ### 4. Rate Limiting Testing
-- [ ] Test anonymous rate limit (100/hour)
+- [ ] Test anonymous rate limit (1000/hour default)
 - [ ] Test authenticated rate limit (1000/hour)
 - [ ] Verify 429 response after limit
 - [ ] Test rate limit headers are present
