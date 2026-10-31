@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
+from django.http import HttpResponse
 from django.test import RequestFactory, TestCase, override_settings
 from rest_framework.test import APIClient
 
@@ -31,8 +32,11 @@ class RateLimitMiddlewareTests(TestCase):
 
         self.assertFalse(middleware._check_rate_limit(request, '192.0.2.1'))
 
-    @override_settings(RATE_LIMIT_ANON='1000/hour')
-    def test_configured_anonymous_limit_allows_more_than_100_requests(self):
+    @override_settings(
+        RATE_LIMIT_ANON='1/hour',
+        RATE_LIMIT_LOGIN='101/hour',
+    )
+    def test_login_has_a_separate_limit_from_general_anonymous_requests(self):
         middleware = RateLimitMiddleware(lambda request: None)
         request = self.factory.post(
             '/api/student/login/',
@@ -42,6 +46,48 @@ class RateLimitMiddlewareTests(TestCase):
 
         for _ in range(101):
             self.assertTrue(middleware._check_rate_limit(request, '192.0.2.2'))
+
+        self.assertFalse(middleware._check_rate_limit(request, '192.0.2.2'))
+
+    @override_settings(RATE_LIMIT_ANON='1/hour'    )
+    def test_bearer_requests_use_drf_throttling_not_shared_ip_middleware_limit(self):
+        middleware = RateLimitMiddleware(lambda request: HttpResponse())
+        request = self.factory.get(
+            '/api/student/profile/',
+            HTTP_AUTHORIZATION='Bearer test-token',
+            REMOTE_ADDR='192.0.2.3',
+        )
+        request.user = AnonymousUser()
+
+        self.assertEqual(middleware(request).status_code, 200)
+        self.assertEqual(middleware(request).status_code, 200)
+
+    @override_settings(RATE_LIMIT_LOGIN='100/hour')
+    def test_login_view_uses_its_dedicated_drf_throttle(self):
+        client = APIClient(HTTP_USER_AGENT='Mozilla/5.0 login-throttle-tests')
+        with patch(
+            'rest_framework.throttling.ScopedRateThrottle.THROTTLE_RATES',
+            {'login': '2/hour'},
+        ):
+            first = client.post(
+                '/api/student/login/',
+                {'mobile': '', 'password': ''},
+                format='json',
+            )
+            second = client.post(
+                '/api/student/login/',
+                {'mobile': '', 'password': ''},
+                format='json',
+            )
+            third = client.post(
+                '/api/student/login/',
+                {'mobile': '', 'password': ''},
+                format='json',
+            )
+
+        self.assertEqual(first.status_code, 400)
+        self.assertEqual(second.status_code, 400)
+        self.assertEqual(third.status_code, 429, third.content.decode())
 
 
 class StudentRegistrationTests(TestCase):

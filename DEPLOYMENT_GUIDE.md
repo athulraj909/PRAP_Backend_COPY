@@ -74,7 +74,9 @@
    CSRF_COOKIE_SECURE=True
    RATE_LIMIT_ANON=1000/hour
    RATE_LIMIT_PUBLIC_ENDPOINTS=1000/hour
+   RATE_LIMIT_LOGIN=1000/hour
    API_ANON_THROTTLE_RATE=1000/hour
+   API_LOGIN_THROTTLE_RATE=1000/hour
    ```
 
    These limits are per IP address for anonymous traffic. Update any existing
@@ -314,7 +316,7 @@ Use PythonAnywhere's built-in backup tools or pg_dump.
 - Ensure token lifetime is appropriate
 
 **4. Rate Limiting Issues**
-- Adjust RATE_LIMIT_ANON, RATE_LIMIT_PUBLIC_ENDPOINTS, and API_ANON_THROTTLE_RATE in .env
+- Adjust RATE_LIMIT_ANON, RATE_LIMIT_PUBLIC_ENDPOINTS, RATE_LIMIT_LOGIN, API_ANON_THROTTLE_RATE, and API_LOGIN_THROTTLE_RATE in .env
 - Check cache configuration for rate limiting
 - Review blocked IPs in logs
 

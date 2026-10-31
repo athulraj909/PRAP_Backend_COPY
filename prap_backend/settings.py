@@ -117,6 +117,7 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_THROTTLE_RATES': {
         'anon': os.getenv('API_ANON_THROTTLE_RATE', '1000/hour'),
+        'login': os.getenv('API_LOGIN_THROTTLE_RATE', '1000/hour'),
         'user': '1000/hour'
     }
 }
@@ -208,6 +209,7 @@ if not DEBUG:
 RATE_LIMIT_ANON = os.getenv('RATE_LIMIT_ANON', '1000/hour')
 RATE_LIMIT_USER = os.getenv('RATE_LIMIT_USER', '500/hour')
 RATE_LIMIT_PUBLIC_ENDPOINTS = os.getenv('RATE_LIMIT_PUBLIC_ENDPOINTS', '1000/hour')
+RATE_LIMIT_LOGIN = os.getenv('RATE_LIMIT_LOGIN', '1000/hour')
 
 # IP Security Settings
 BLOCKED_IPS = []  # Add permanently blocked IPs here

@@ -201,7 +201,9 @@ Adjust these settings in `.env`:
 RATE_LIMIT_ANON=500/hour
 RATE_LIMIT_USER=5000/hour
 RATE_LIMIT_PUBLIC_ENDPOINTS=1000/hour
+RATE_LIMIT_LOGIN=1000/hour
 API_ANON_THROTTLE_RATE=1000/hour
+API_LOGIN_THROTTLE_RATE=1000/hour
 
 # Reduce security checks for performance
 REQUIRE_USER_AGENT=False
@@ -223,7 +225,9 @@ Keep current settings but consider:
 RATE_LIMIT_ANON=50/hour
 RATE_LIMIT_USER=500/hour
 RATE_LIMIT_PUBLIC_ENDPOINTS=1000/hour
+RATE_LIMIT_LOGIN=1000/hour
 API_ANON_THROTTLE_RATE=50/hour
+API_LOGIN_THROTTLE_RATE=1000/hour
 
 # Enable all security checks
 REQUIRE_USER_AGENT=True

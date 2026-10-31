@@ -49,6 +49,7 @@ Tiered rate limiting for different endpoint types:
 - Authenticated users: 500 requests/hour
 - Public endpoints: 1000 requests/hour
 - DRF anonymous throttle: 1000 requests/hour (`API_ANON_THROTTLE_RATE`)
+- Login endpoints: 1000 requests/hour per IP (`RATE_LIMIT_LOGIN` and `API_LOGIN_THROTTLE_RATE`)
 
 ### IP Security
 - Automatic IP blocking after 5 failed login attempts
@@ -99,7 +100,9 @@ CSRF_COOKIE_SECURE=True
 RATE_LIMIT_ANON=1000/hour
 RATE_LIMIT_USER=500/hour
 RATE_LIMIT_PUBLIC_ENDPOINTS=1000/hour
+RATE_LIMIT_LOGIN=1000/hour
 API_ANON_THROTTLE_RATE=1000/hour
+API_LOGIN_THROTTLE_RATE=1000/hour
 
 # IP Security
 MAX_FAILED_ATTEMPTS=5

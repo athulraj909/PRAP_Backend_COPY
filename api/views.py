@@ -7,6 +7,7 @@ from django.db.models import Count
 from rest_framework import status, generics, permissions, pagination
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import District, College, Course, StudentProfile, AssessmentCategory, Question, ExamSettings
@@ -311,6 +312,8 @@ class QuestionBatchDeleteView(APIView):
 
 class AdminLoginView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login'
 
     def post(self, request):
         email = request.data.get('email')
@@ -432,6 +435,8 @@ class StudentRegisterView(APIView):
 
 class StudentLoginView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login'
 
     def post(self, request):
         serializer = StudentLoginSerializer(data=request.data)

@@ -30,6 +30,8 @@
 - ✅ Rate Limiting Middleware
   - Anonymous users: 1000 requests/hour by default
   - Public endpoints: 1000 requests/hour by default
+  - Login endpoints: 1000 requests/hour per IP by default
+  - Bearer-authenticated requests use DRF per-user throttling
   - IP-based tracking
   - Configurable limits via environment variables
 
@@ -165,6 +167,7 @@ CSRF_COOKIE_SECURE=True
 
 ### 4. Rate Limiting Testing
 - [ ] Test anonymous rate limit (1000/hour default)
+- [ ] Test login rate limit (1000/hour default)
 - [ ] Test authenticated rate limit (1000/hour)
 - [ ] Verify 429 response after limit
 - [ ] Test rate limit headers are present
