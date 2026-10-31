@@ -8,6 +8,7 @@ from rest_framework import status, generics, permissions, pagination
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import District, College, Course, StudentProfile, AssessmentCategory, Question, ExamSettings
@@ -815,15 +816,13 @@ class StudentExamResultsView(APIView):
     Requires authentication to prevent unauthorized access to student data
     """
     permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = [APIKeyAuthentication]
+    authentication_classes = [JWTAuthentication]
 
     def get(self, request):
         from .models import AssessmentResult, StudentProfile
         import re
         
         try:
-            # Get student profile from authenticated user
-            # For API key auth, we need to get mobile from query param but verify it exists
             mobile = request.query_params.get('mobile')
             if not mobile:
                 return Response({
@@ -838,8 +837,17 @@ class StudentExamResultsView(APIView):
                     'message': 'Invalid mobile number format. Must be 10 digits.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Verify that the mobile number belongs to a registered student
-            student_profile = StudentProfile.objects.filter(mobile=mobile).first()
+            # Only return results belonging to the student represented by this JWT.
+            if request.user.role != 'student' or request.user.mobile != mobile:
+                return Response({
+                    'success': False,
+                    'message': 'You are not authorized to view these results.'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            student_profile = StudentProfile.objects.filter(
+                user=request.user,
+                mobile=mobile,
+            ).first()
             if not student_profile:
                 return Response({
                     'success': False,

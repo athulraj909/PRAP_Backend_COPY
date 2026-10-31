@@ -7,9 +7,10 @@ from django.db import connection
 from django.test import RequestFactory, TestCase, TransactionTestCase, override_settings
 from rest_framework.test import APIClient
 from django.db.migrations.executor import MigrationExecutor
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .middleware.rate_limit import RateLimitMiddleware
-from .models import Course, StudentProfile
+from .models import AssessmentResult, Course, StudentProfile, User
 from .serializers import CourseSerializer
 
 
@@ -176,6 +177,60 @@ class CourseClassificationMigrationTests(TransactionTestCase):
         self.assertEqual(result.score, 8)
         self.assertEqual(result.category_breakdown, {'reasoning': 8})
         self.assertEqual(result.answers, {'question1': 'A'})
+
+
+class StudentExamResultsAuthorizationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='8383483456',
+            mobile='8383483456',
+            password='test-password',
+            role='student',
+        )
+        self.profile = StudentProfile.objects.create(
+            user=self.user,
+            student_name='History Test Student',
+            email='history-test@example.com',
+            mobile='8383483456',
+        )
+        self.result = AssessmentResult.objects.create(
+            student=self.profile,
+            student_mobile=self.profile.mobile,
+            student_name=self.profile.student_name,
+            college='Test College',
+            course='Computer Science',
+            score=8,
+            total_marks=10,
+            category_breakdown={'reasoning': 8},
+            answers={'question1': 'A'},
+        )
+        self.client = APIClient(HTTP_USER_AGENT='Mozilla/5.0 history-tests')
+        self.url = f'/api/student/exam/results/?mobile={self.profile.mobile}'
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+
+    def test_assessment_history_requires_authentication(self):
+        response = self.client.get(self.url)
+
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_student_can_fetch_own_assessment_history_with_bearer_token(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()['results']), 1)
+        self.assertEqual(response.json()['results'][0]['id'], self.result.id)
+
+    def test_student_cannot_fetch_another_students_assessment_history(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+        response = self.client.get(
+            '/api/student/exam/results/?mobile=9876543210',
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['results'] if 'results' in response.json() else [], [])
 
 
 class StudentRegistrationTests(TestCase):
