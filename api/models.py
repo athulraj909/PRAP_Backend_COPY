@@ -49,7 +49,6 @@ class Course(models.Model):
     APPLICABLE_CHOICES = (
         ('IT', 'IT'),
         ('NON_IT', 'NON_IT'),
-        ('BOTH', 'BOTH'),
     )
     STATUS_CHOICES = (
         ('Active', 'Active'),
@@ -57,7 +56,7 @@ class Course(models.Model):
     )
     course_name = models.CharField(max_length=255)
     duration = models.CharField(max_length=50)  # e.g., "4 Years", "3 Years"
-    applicable_to = models.CharField(max_length=20, choices=APPLICABLE_CHOICES, default='BOTH')
+    applicable_to = models.CharField(max_length=20, choices=APPLICABLE_CHOICES, default='IT')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Active')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

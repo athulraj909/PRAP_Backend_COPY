@@ -33,7 +33,11 @@ class CollegeSerializer(serializers.ModelSerializer):
 
 class CourseSerializer(serializers.ModelSerializer):
     courseName = serializers.CharField(source='course_name', required=True)
-    applicableTo = serializers.CharField(source='applicable_to', required=True)
+    applicableTo = serializers.ChoiceField(
+        source='applicable_to',
+        choices=Course.APPLICABLE_CHOICES,
+        required=True,
+    )
 
     class Meta:
         model = Course

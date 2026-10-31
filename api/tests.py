@@ -3,11 +3,14 @@ from unittest.mock import patch
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.http import HttpResponse
-from django.test import RequestFactory, TestCase, override_settings
+from django.db import connection
+from django.test import RequestFactory, TestCase, TransactionTestCase, override_settings
 from rest_framework.test import APIClient
+from django.db.migrations.executor import MigrationExecutor
 
 from .middleware.rate_limit import RateLimitMiddleware
 from .models import Course, StudentProfile
+from .serializers import CourseSerializer
 
 
 class RateLimitMiddlewareTests(TestCase):
@@ -88,6 +91,91 @@ class RateLimitMiddlewareTests(TestCase):
         self.assertEqual(first.status_code, 400)
         self.assertEqual(second.status_code, 400)
         self.assertEqual(third.status_code, 429, third.content.decode())
+
+
+class CourseClassificationTests(TestCase):
+    def test_course_serializer_accepts_it_and_non_it_only(self):
+        for classification in ('IT', 'NON_IT'):
+            serializer = CourseSerializer(data={
+                'courseName': f'{classification} course',
+                'duration': '4 Years',
+                'applicableTo': classification,
+            })
+
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_course_serializer_rejects_both_classification(self):
+        serializer = CourseSerializer(data={
+            'courseName': 'Legacy course',
+            'duration': '4 Years',
+            'applicableTo': 'BOTH',
+        })
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('applicableTo', serializer.errors)
+
+
+class CourseClassificationMigrationTests(TransactionTestCase):
+    migrate_from = ('api', '0006_studentprofile_passout_year_and_more')
+    migrate_to = ('api', '0007_course_it_or_non_it')
+
+    def setUp(self):
+        super().setUp()
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
+        old_apps = executor.loader.project_state([self.migrate_from]).apps
+
+        Course = old_apps.get_model('api', 'Course')
+        StudentProfile = old_apps.get_model('api', 'StudentProfile')
+        AssessmentResult = old_apps.get_model('api', 'AssessmentResult')
+
+        legacy_course = Course.objects.create(
+            course_name='Legacy course',
+            duration='4 Years',
+            applicable_to='BOTH',
+        )
+        profile = StudentProfile.objects.create(
+            student_name='Migration Test Student',
+            email='migration-test@example.com',
+            mobile='9876543210',
+            course=legacy_course,
+        )
+        AssessmentResult.objects.create(
+            student_id=profile.pk,
+            student_mobile='9876543210',
+            student_name='Migration Test Student',
+            college='Test College',
+            course='Legacy course',
+            score=8,
+            total_marks=10,
+            category_breakdown={'reasoning': 8},
+            answers={'question1': 'A'},
+        )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_to])
+        self.new_apps = executor.loader.project_state([self.migrate_to]).apps
+
+    def tearDown(self):
+        MigrationExecutor(connection).migrate([self.migrate_to])
+        super().tearDown()
+
+    def test_existing_course_profile_and_assessment_history_are_preserved(self):
+        Course = self.new_apps.get_model('api', 'Course')
+        StudentProfile = self.new_apps.get_model('api', 'StudentProfile')
+        AssessmentResult = self.new_apps.get_model('api', 'AssessmentResult')
+
+        course = Course.objects.get(course_name='Legacy course')
+        profile = StudentProfile.objects.get(mobile='9876543210')
+        result = AssessmentResult.objects.get(student_mobile='9876543210')
+
+        self.assertEqual(course.applicable_to, 'NON_IT')
+        self.assertEqual(profile.course_id, course.id)
+        self.assertEqual(AssessmentResult.objects.count(), 1)
+        self.assertEqual(result.course, 'Legacy course')
+        self.assertEqual(result.score, 8)
+        self.assertEqual(result.category_breakdown, {'reasoning': 8})
+        self.assertEqual(result.answers, {'question1': 'A'})
 
 
 class StudentRegistrationTests(TestCase):
